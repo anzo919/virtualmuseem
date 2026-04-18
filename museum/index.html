@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carthage Virtual Museum — A Journey Through Time</title>
+  <style>
+    :root {
+      --font:      "Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
+      --gold:      #e8d0a8;
+      --gold-dim:  rgba(245,228,200,0.5);
+      --panel-bg:  rgba(22,18,14,0.93);
+    }
+    *, *::before, *::after { margin: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #1a1410; }
+    /* Full-viewport canvas sits after #blocker in DOM; keep it behind UI hit-testing until play. */
+    body > canvas {
+      display: block; width: 100%; height: 100%;
+      position: fixed; inset: 0; z-index: 0;
+      touch-action: none;
+      /* Clicks must reach #blocker until pointer lock; JS may set to auto while playing */
+      pointer-events: none;
+    }
+
+    /* ── Crosshair ── */
+    #crosshair {
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px; height: 20px;
+      pointer-events: none; z-index: 10;
+      transition: opacity .25s;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute;
+      background: rgba(245,228,200,.42); border-radius: 1px;
+    }
+    #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+    #crosshair::after  { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+    #crosshair.highlight::before,
+    #crosshair.highlight::after { background: rgba(255,220,160,.9); }
+
+    /* ── Entry Blocker ── */
+    #blocker {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(18,14,10,.92);
+      z-index: 60; cursor: pointer;
+      transition: opacity .55s;
+    }
+    #blocker.fade-out { opacity: 0; pointer-events: none; }
+    #blocker h1 {
+      font-family: var(--font); font-size: 2.8rem;
+      color: var(--gold); letter-spacing: .07em; margin-bottom: .2rem;
+    }
+    #blocker .subtitle {
+      font-family: var(--font); font-size: .82rem;
+      color: var(--gold-dim); letter-spacing: .1em; text-transform: uppercase;
+      margin-bottom: .5rem;
+    }
+    #blocker .era-preview {
+      font-family: var(--font); font-size: .78rem;
+      color: rgba(200,160,80,.5); letter-spacing: .08em; margin-bottom: 1.8rem;
+    }
+    #blocker p.prompt {
+      font-family: var(--font); font-size: .95rem;
+      color: rgba(245,228,200,.7); margin-bottom: 1.2rem;
+    }
+    #blocker .controls-grid {
+      display: grid; grid-template-columns: auto auto;
+      gap: .3rem 1.4rem;
+      font-family: var(--font); font-size: .82rem;
+      color: var(--gold-dim);
+    }
+    #blocker .controls-grid kbd {
+      display: inline-block;
+      background: rgba(245,228,200,.07);
+      border: 1px solid rgba(245,228,200,.16);
+      border-radius: 3px; padding: 2px 8px;
+      font-family: inherit; color: var(--gold);
+      min-width: 30px; text-align: center;
+    }
+
+    /* ── NPC Dialogue Bubble ── */
+    #npc-alert {
+      position: fixed; top: 1.4rem; left: 50%;
+      transform: translateX(-50%);
+      max-width: 520px; width: 85vw;
+      font-family: var(--font); font-size: .86rem; line-height: 1.6;
+      color: var(--gold); background: var(--panel-bg);
+      border: 1px solid rgba(200,170,120,.2);
+      padding: .6rem 1.4rem; border-radius: 6px;
+      pointer-events: none; opacity: 0;
+      transition: opacity .5s; z-index: 10; text-align: center;
+    }
+    #npc-alert.visible { opacity: 1; }
+    #npc-alert .npc-label {
+      font-size: .6rem; text-transform: uppercase;
+      letter-spacing: .12em; color: var(--gold-dim); margin-bottom: .2rem;
+    }
+
+    /* ── Interaction Hint (artwork) ── */
+    #interact-hint {
+      position: fixed; bottom: 1.6rem; left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font); font-size: .82rem;
+      color: var(--gold-dim); background: rgba(22,18,14,.7);
+      border: 1px solid rgba(200,170,120,.15);
+      padding: .4rem 1.1rem; border-radius: 5px;
+      pointer-events: none; opacity: 0;
+      transition: opacity .3s; z-index: 10;
+    }
+    #interact-hint.visible { opacity: 1; }
+
+    /* ── Door Interact Prompt (styled like game UI) ── */
+    #door-prompt {
+      position: fixed; bottom: 3.2rem; left: 50%;
+      transform: translateX(-50%) scale(0.85);
+      display: flex; align-items: center; gap: .75rem;
+      background: rgba(12,10,8,.88);
+      border: 1px solid rgba(200,140,40,.35);
+      border-radius: 8px; padding: .55rem 1.2rem .55rem .7rem;
+      pointer-events: none; opacity: 0;
+      transition: opacity .25s, transform .25s;
+      z-index: 15;
+      box-shadow: 0 4px 24px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,220,120,.08);
+    }
+    #door-prompt.visible {
+      opacity: 1; transform: translateX(-50%) scale(1);
+    }
+    /* Left accent bar */
+    #door-prompt::before {
+      content: '';
+      position: absolute; left: 0; top: 20%; bottom: 20%;
+      width: 3px; border-radius: 2px;
+      background: linear-gradient(180deg, #e8a020, #c06010);
+    }
+    .door-prompt-key {
+      width: 42px; height: 42px; flex-shrink: 0;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #3a2808, #1a1004);
+      border: 2px solid rgba(220,160,40,.6);
+      box-shadow: 0 0 10px rgba(220,140,20,.3), inset 0 1px 0 rgba(255,220,100,.12);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font); font-size: 1.15rem; font-weight: bold;
+      color: #f0d080;
+      text-shadow: 0 0 8px rgba(240,180,40,.6);
+    }
+    .door-prompt-text { display: flex; flex-direction: column; gap: .05rem; }
+    .door-prompt-action {
+      font-family: var(--font); font-size: .78rem; font-weight: bold;
+      color: #f0d080; letter-spacing: .06em; text-transform: uppercase;
+      text-shadow: 0 0 6px rgba(240,180,40,.4);
+    }
+    .door-prompt-sub {
+      font-family: var(--font); font-size: .62rem;
+      color: rgba(200,160,80,.6); letter-spacing: .05em; text-transform: uppercase;
+    }
+
+    /* ── Energy Bar ── */
+    #energy-container {
+      position: fixed; bottom: 1.2rem; right: 1rem;
+      display: flex; align-items: center; gap: .5rem;
+      pointer-events: none; z-index: 10;
+      opacity: 0; transition: opacity .4s;
+    }
+    #energy-container.visible { opacity: 1; }
+    #energy-label {
+      font-family: var(--font); font-size: .65rem;
+      text-transform: uppercase; letter-spacing: .08em;
+      color: var(--gold-dim);
+    }
+    #energy-bar {
+      width: 100px; height: 5px;
+      background: rgba(245,228,200,.12);
+      border: 1px solid rgba(200,170,120,.15);
+      border-radius: 3px; overflow: hidden;
+    }
+    #energy-fill {
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, #c9a227, #e8d0a8);
+      border-radius: 3px; transform-origin: left;
+      transition: transform .12s;
+    }
+    #energy-fill.depleting { background: linear-gradient(90deg, #a07818, #c9a227); }
+
+    /* ── Zone Name HUD (top-left) ── */
+    #zone-hud {
+      position: fixed; top: 1rem; left: 1rem;
+      pointer-events: none; z-index: 10;
+      opacity: 0; transition: opacity .6s;
+    }
+    #zone-hud.visible { opacity: 1; }
+    #zone-name {
+      font-family: var(--font); font-size: 1.05rem;
+      color: var(--gold); letter-spacing: .04em;
+    }
+    #zone-subtitle {
+      font-family: var(--font); font-size: .68rem;
+      color: var(--gold-dim); letter-spacing: .06em; margin-top: .15rem;
+    }
+
+    /* ── Era Progress Bar (bottom-left) ── */
+    #era-progress {
+      position: fixed; bottom: 1.4rem; left: 1rem;
+      display: flex; flex-direction: column; gap: .45rem;
+      pointer-events: none; z-index: 10;
+      opacity: 0; transition: opacity .6s;
+    }
+    #era-progress.visible { opacity: 1; }
+    #era-year {
+      font-family: var(--font); font-size: .72rem;
+      color: rgba(200,160,80,.7); letter-spacing: .1em;
+    }
+    .era-dots {
+      display: flex; gap: .4rem; align-items: center;
+    }
+    .era-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 1px solid rgba(200,170,120,.35);
+      background: rgba(200,170,120,.12);
+      transition: all .4s ease;
+      position: relative;
+    }
+    .era-dot.active {
+      background: rgba(200,160,80,.85);
+      border-color: rgba(240,200,140,.7);
+      box-shadow: 0 0 6px rgba(200,160,80,.5);
+      transform: scale(1.25);
+    }
+    .era-dot::after {
+      content: attr(data-label);
+      position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font); font-size: .5rem;
+      color: rgba(200,160,80,.55); white-space: nowrap;
+      margin-bottom: 3px;
+      opacity: 0; transition: opacity .3s;
+    }
+    .era-dot.active::after { opacity: 1; }
+
+    /* ── Zone Narration Overlay ── */
+    #zone-narration {
+      position: fixed; bottom: 4.5rem; left: 50%;
+      transform: translateX(-50%);
+      max-width: 600px; width: 90vw; text-align: center;
+      font-family: var(--font); font-size: .9rem; line-height: 1.75;
+      color: rgba(245,228,200,.82);
+      background: rgba(14,11,8,.82);
+      border: 1px solid rgba(200,170,120,.14);
+      padding: 1rem 1.8rem; border-radius: 8px;
+      pointer-events: none; opacity: 0;
+      transition: opacity .85s; z-index: 12;
+    }
+    #zone-narration.visible { opacity: 1; }
+
+    /* ── Minimap (portrait) ── */
+    #minimap {
+      position: fixed; top: 1rem; right: 1rem;
+      width: 90px; height: 240px;
+      background: rgba(22,18,14,.82);
+      border: 1px solid rgba(200,170,120,.2);
+      border-radius: 6px;
+      pointer-events: none; z-index: 10;
+      opacity: 0; transition: opacity .4s; overflow: hidden;
+    }
+    #minimap.visible { opacity: 1; }
+    #minimap canvas { width: 100%; height: 100%; }
+
+    /* ── Artwork Detail Panel ── */
+    #artwork-panel {
+      position: fixed; top: 0; right: 0;
+      width: 380px; max-width: 92vw; height: 100%;
+      background: var(--panel-bg);
+      border-left: 1px solid rgba(200,170,120,.15);
+      font-family: var(--font); color: rgba(245,228,200,.85);
+      z-index: 30; padding: 2.4rem 1.8rem 2rem;
+      transform: translateX(100%);
+      transition: transform .4s cubic-bezier(.22,1,.36,1);
+      overflow-y: auto;
+    }
+    #artwork-panel.open { transform: translateX(0); }
+    #artwork-panel .close-btn {
+      position: absolute; top: 1rem; right: 1rem;
+      background: none; border: 1px solid rgba(200,170,120,.2);
+      color: var(--gold); font-size: 1.2rem;
+      width: 32px; height: 32px; border-radius: 4px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    #artwork-panel .close-btn:hover { background: rgba(200,170,120,.1); }
+    #artwork-panel h2 {
+      font-size: 1.35rem; color: var(--gold);
+      margin-bottom: 1rem; line-height: 1.35; padding-right: 2.5rem;
+    }
+    #artwork-panel .meta-row {
+      display: flex; gap: .8rem; margin-bottom: .8rem; flex-wrap: wrap;
+    }
+    #artwork-panel .meta-tag {
+      font-size: .65rem; text-transform: uppercase;
+      letter-spacing: .08em; padding: .25rem .6rem;
+      border-radius: 3px; border: 1px solid rgba(200,170,120,.18);
+      color: var(--gold-dim);
+    }
+    #artwork-panel .meta-tag.cat { border-color: rgba(200,170,120,.3); }
+    #artwork-panel .label {
+      font-size: .7rem; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--gold-dim);
+      margin-top: 1.2rem; margin-bottom: .35rem;
+    }
+    #artwork-panel .desc, #artwork-panel .context {
+      font-size: .88rem; line-height: 1.65;
+      color: rgba(245,228,200,.72);
+    }
+    #artwork-panel .divider {
+      border: none; border-top: 1px solid rgba(200,170,120,.12); margin: 1.2rem 0;
+    }
+
+    /* ── Room Info Panel (top-centre, auto-opens on first room entry) ── */
+    #room-info-panel {
+      position: fixed;
+      top: 1.4rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(calc(-100% - 2rem));
+      min-width: 480px; max-width: 680px; width: 88vw;
+      z-index: 50;
+      pointer-events: none;
+      opacity: 0;
+      transition:
+        transform 0.44s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity   0.30s ease;
+    }
+    #room-info-panel.open {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    #room-info-panel.rip-refresh .rip-inner {
+      animation: rip-shimmer 0.36s ease;
+    }
+    @keyframes rip-shimmer {
+      0%   { box-shadow: 0 8px 36px rgba(0,0,0,.6), 0 0 0    0   rgba(200,160,80,0); }
+      40%  { box-shadow: 0 8px 36px rgba(0,0,0,.6), 0 0 22px 6px rgba(200,160,80,.24); }
+      100% { box-shadow: 0 8px 36px rgba(0,0,0,.6), 0 0 0    0   rgba(200,160,80,0); }
+    }
+
+    .rip-inner {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      background: rgba(16, 13, 9, 0.88);
+      border: 1px solid rgba(200, 160, 80, 0.28);
+      border-radius: 12px;
+      padding: 1.2rem 1.7rem;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 8px 36px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,220,100,.07);
+      overflow: hidden;
+    }
+    .rip-inner::before {
+      content: '';
+      position: absolute; top: 0; left: 12%; right: 12%;
+      height: 1px;
+      background: linear-gradient(90deg,
+        transparent, rgba(232,208,140,.6), transparent);
+    }
+    .rip-inner::after {
+      content: '';
+      position: absolute; left: 0; top: 16%; bottom: 16%;
+      width: 3px; border-radius: 2px;
+      background: linear-gradient(180deg, #c8962a, #6b4d10);
+    }
+
+    .rip-number {
+      font-family: var(--font);
+      font-size: 3.2rem; font-weight: 700;
+      color: rgba(200, 160, 80, 0.18);
+      letter-spacing: .02em; line-height: 1;
+      flex-shrink: 0; user-select: none;
+    }
+    .rip-content {
+      flex: 1; min-width: 0;
+    }
+    .rip-title {
+      font-family: var(--font);
+      font-size: 1.38rem;
+      color: var(--gold);
+      letter-spacing: .04em; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .rip-subtitle {
+      font-family: var(--font);
+      font-size: .88rem;
+      color: var(--gold-dim);
+      letter-spacing: .08em; text-transform: uppercase;
+      margin-top: .28rem;
+    }
+    .rip-year {
+      font-family: var(--font);
+      font-size: .78rem;
+      color: rgba(200,160,80,.50);
+      letter-spacing: .14em;
+      margin-top: .36rem;
+    }
+
+    .rip-hint {
+      display: flex; flex-direction: column;
+      align-items: center; gap: .28rem;
+      flex-shrink: 0;
+    }
+    .rip-hint-key {
+      width: 36px; height: 36px;
+      border: 1px solid rgba(200,160,80,.32);
+      border-radius: 7px;
+      background: rgba(200,160,80,.09);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font); font-size: 1.15rem; font-weight: 700;
+      color: rgba(232,208,140,.6);
+    }
+    .rip-hint-label {
+      font-family: var(--font);
+      font-size: .52rem; letter-spacing: .12em;
+      text-transform: uppercase;
+      color: rgba(200,160,80,.34);
+    }
+
+    .hidden { display: none !important; }
+
+    /* ── Loading checklist ── */
+    #loading-checklist {
+      margin: 0 0 1.1rem;
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: .35rem;
+      opacity: .88;
+    }
+    .loading-stage {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      font-size: .72rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: rgba(212,180,131,.62);
+      transition: color .15s ease, opacity .15s ease;
+    }
+    .loading-stage .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid rgba(212,180,131,.35);
+      background: rgba(212,180,131,.16);
+      box-shadow: none;
+      transition: all .15s ease;
+      flex-shrink: 0;
+    }
+    .loading-stage[data-state="active"] {
+      color: rgba(240,212,160,.95);
+    }
+    .loading-stage[data-state="active"] .dot {
+      background: #d4b483;
+      border-color: #e2c48f;
+      box-shadow: 0 0 8px rgba(212,180,131,.6);
+    }
+    .loading-stage[data-state="done"] {
+      color: rgba(188,220,156,.92);
+    }
+    .loading-stage[data-state="done"] .dot {
+      background: #98c46a;
+      border-color: #b5db86;
+      box-shadow: 0 0 8px rgba(152,196,106,.45);
+    }
+    .loading-stage[data-state="error"] {
+      color: rgba(235,150,120,.95);
+    }
+    .loading-stage[data-state="error"] .dot {
+      background: #d06a58;
+      border-color: #e58b7a;
+      box-shadow: 0 0 8px rgba(208,106,88,.4);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══ Entry Screen ══════════════════════════════════════════════════════ -->
+  <div id="blocker">
+    <h1>Carthage Virtual Museum</h1>
+    <div class="subtitle">A Chronological Journey — 814 BC to Roman Legacy</div>
+    <div class="era-preview">
+      Foundation · Commerce · Conflict · Apogee · War · Fall · Legacy
+    </div>
+    <p class="prompt">Click anywhere — or press Enter — to begin your journey</p>
+    <div class="controls-grid">
+      <span><kbd>W</kbd> / <kbd>Z</kbd></span><span>Walk forward</span>
+      <span><kbd>S</kbd></span>              <span>Walk backward</span>
+      <span><kbd>A</kbd> / <kbd>Q</kbd></span><span>Strafe left</span>
+      <span><kbd>D</kbd></span>              <span>Strafe right</span>
+      <span><kbd>Shift</kbd></span>          <span>Sprint</span>
+      <span><kbd>Mouse</kbd></span>          <span>Look around</span>
+      <span><kbd>Click</kbd> / <kbd>E</kbd></span><span>Inspect / Open door</span>
+      <span><kbd>Esc</kbd></span>             <span>Release cursor</span>
+      <span><kbd>Y</kbd></span>               <span>Room info panel</span>
+    </div>
+  </div>
+
+  <!-- ══ Crosshair ════════════════════════════════════════════════════════ -->
+  <div id="crosshair" class="hidden"></div>
+
+  <!-- ══ NPC Historian Dialogue ════════════════════════════════════════════ -->
+  <div id="npc-alert">
+    <div class="npc-label">Carthaginian Historian</div>
+    <span id="npc-dialogue-text">Your guide is nearby…</span>
+  </div>
+
+  <!-- ══ Artifact Interaction Hint ═════════════════════════════════════════ -->
+  <div id="interact-hint"><kbd>E</kbd> / Click — Inspect</div>
+
+  <!-- ══ Door Prompt ═══════════════════════════════════════════════════════ -->
+  <div id="door-prompt">
+    <div class="door-prompt-key">E</div>
+    <div class="door-prompt-text">
+      <span class="door-prompt-action">Press E</span>
+      <span class="door-prompt-sub" id="door-prompt-sub">Open Door</span>
+    </div>
+  </div>
+
+  <!-- ══ Sprint Energy Bar ═════════════════════════════════════════════════ -->
+  <div id="energy-container">
+    <span id="energy-label">Energy</span>
+    <div id="energy-bar"><div id="energy-fill"></div></div>
+  </div>
+
+  <!-- ══ Zone / Era HUD (top-left) ═════════════════════════════════════════ -->
+  <div id="zone-hud">
+    <div id="zone-name"></div>
+    <div id="zone-subtitle"></div>
+  </div>
+
+  <!-- ══ Room Info Panel (top-centre, first-visit auto-open) ══════════════ -->
+  <div id="room-info-panel">
+    <div class="rip-inner">
+      <div class="rip-number" id="room-info-number">01</div>
+      <div class="rip-content">
+        <div class="rip-title"    id="room-info-title"></div>
+        <div class="rip-subtitle" id="room-info-subtitle"></div>
+        <div class="rip-year"     id="room-info-year"></div>
+      </div>
+      <div class="rip-hint">
+        <div class="rip-hint-key">Y</div>
+        <div class="rip-hint-label">close</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Era Progress Indicator (bottom-left) ══════════════════════════════ -->
+  <div id="era-progress">
+    <div id="era-year"></div>
+    <div class="era-dots">
+      <span class="era-dot" data-room="1" data-label="814 BC"></span>
+      <span class="era-dot" data-room="2" data-label="750 BC"></span>
+      <span class="era-dot" data-room="3" data-label="580 BC"></span>
+      <span class="era-dot" data-room="4" data-label="400 BC"></span>
+      <span class="era-dot" data-room="5" data-label="264 BC"></span>
+      <span class="era-dot" data-room="6" data-label="146 BC"></span>
+      <span class="era-dot" data-room="7" data-label="44 BC"></span>
+    </div>
+  </div>
+
+  <!-- ══ Zone Entry Narration ══════════════════════════════════════════════ -->
+  <div id="zone-narration"></div>
+
+  <!-- ══ Minimap (portrait) ════════════════════════════════════════════════ -->
+  <div id="minimap">
+    <canvas id="minimap-canvas" width="90" height="240"></canvas>
+  </div>
+
+  <!-- ══ Artifact Detail Panel ═════════════════════════════════════════════ -->
+  <div id="artwork-panel">
+    <button class="close-btn" id="artwork-close">&times;</button>
+    <h2 id="artwork-title"></h2>
+    <div class="meta-row">
+      <span class="meta-tag cat" id="artwork-category"></span>
+      <span class="meta-tag"     id="artwork-origin"></span>
+    </div>
+    <div class="label">Description</div>
+    <p class="desc" id="artwork-desc"></p>
+    <hr class="divider">
+    <div class="label">Historical Context</div>
+    <p class="context" id="artwork-context"></p>
+  </div>
+
+  <script>
+    // Show era-progress once pointer locks (player is in game)
+    document.addEventListener('pointerlockchange', () => {
+      const prog = document.getElementById('era-progress');
+      if (prog) prog.classList.toggle('visible', !!document.pointerLockElement);
+    });
+  </script>
+
+  <!-- ══ Loading Screen ═══════════════════════════════════════════════════════ -->
+  <div id="loading-screen" style="
+    position:fixed; inset:0; z-index:9999;
+    background:#0e0c0a;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family:'Georgia',serif; color:#d4b483;
+  ">
+    <div style="font-size:1.6rem; letter-spacing:.18em; margin-bottom:1.4rem; opacity:.9;">
+      CARTHAGE VIRTUAL MUSEUM
+    </div>
+    <div id="loading-label" style="
+      font-size:.82rem; letter-spacing:.12em; opacity:.6;
+      margin-bottom:1.6rem; min-height:1.2em;
+    ">Initialising…</div>
+    <div id="loading-checklist">
+      <div class="loading-stage" id="loading-stage-build" data-state="pending"><span class="dot"></span><span>Build</span></div>
+      <div class="loading-stage" id="loading-stage-glb" data-state="pending"><span class="dot"></span><span>GLB</span></div>
+      <div class="loading-stage" id="loading-stage-shaders" data-state="pending"><span class="dot"></span><span>Shaders</span></div>
+      <div class="loading-stage" id="loading-stage-gpu" data-state="pending"><span class="dot"></span><span>GPU Warmup</span></div>
+    </div>
+    <div style="
+      width:320px; height:4px; background:rgba(212,180,131,.15);
+      border-radius:2px; overflow:hidden;
+    ">
+      <div id="loading-bar-fill" style="
+        height:100%; width:0%; background:#c8a030;
+        border-radius:2px; transition:width .15s ease;
+      "></div>
+    </div>
+  </div>
+
+  <!-- Runs before ES modules: if this text never changes, main.js failed to load (check console / network). -->
+  <script>
+    (function () {
+      var label = document.getElementById("loading-label");
+      var bar = document.getElementById("loading-bar-fill");
+      if (label) label.textContent = "Loading 3D engine (three.js)…";
+      if (bar) bar.style.width = "3%";
+    })();
+  </script>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./node_modules/three/build/three.module.js",
+      "three/addons/": "./node_modules/three/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

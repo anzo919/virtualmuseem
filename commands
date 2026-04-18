@@ -1,0 +1,2 @@
+cd c:\3ia\threejs\museum
+python -c "import http.server,socketserver; H=type('H',(http.server.SimpleHTTPRequestHandler,),{'end_headers':lambda s:(s.send_header('Cache-Control','no-store'),super(type(s),s).end_headers())}); socketserver.TCPServer(('',8000),H).serve_forever()"
