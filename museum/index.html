@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Carthage Virtual Museum — A Journey Through Time</title>
+  <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" />
   <style>
     :root {
       --font:      "Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
@@ -427,6 +428,65 @@
 
     .hidden { display: none !important; }
 
+    /* ── Audio / volume (top-right, beside minimap) ── */
+    #audio-menu {
+      position: fixed;
+      top: 1rem;
+      right: calc(1rem + 100px);
+      z-index: 65;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.38rem 0.55rem 0.38rem 0.65rem;
+      font-family: var(--font);
+      background: rgba(22, 18, 14, 0.88);
+      border: 1px solid rgba(200, 170, 120, 0.22);
+      border-radius: 8px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 220, 120, 0.06);
+      pointer-events: auto;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    #audio-menu .audio-menu-title {
+      font-size: 0.58rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(200, 160, 80, 0.55);
+      margin-right: 0.15rem;
+      user-select: none;
+    }
+    #audio-menu .audio-menu-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+      font-size: 1.1rem;
+      line-height: 1;
+      color: var(--gold);
+      background: rgba(212, 180, 131, 0.1);
+      border: 1px solid rgba(200, 170, 120, 0.28);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+    }
+    #audio-menu .audio-menu-btn:hover {
+      background: rgba(212, 180, 131, 0.2);
+      border-color: rgba(240, 200, 140, 0.45);
+    }
+    #audio-menu .audio-menu-btn:active {
+      transform: scale(0.94);
+    }
+    #audio-menu .audio-menu-value {
+      min-width: 2.5rem;
+      text-align: center;
+      font-size: 0.78rem;
+      color: rgba(245, 228, 200, 0.85);
+      letter-spacing: 0.04em;
+      user-select: none;
+    }
+
     /* ── Loading checklist ── */
     #loading-checklist {
       margin: 0 0 1.1rem;
@@ -502,6 +562,7 @@
       <span><kbd>Click</kbd> / <kbd>E</kbd></span><span>Inspect / Open door</span>
       <span><kbd>Esc</kbd></span>             <span>Release cursor</span>
       <span><kbd>Y</kbd></span>               <span>Room info panel</span>
+      <span><kbd>−</kbd> / <kbd>=</kbd></span> <span>Volume (while exploring)</span>
     </div>
   </div>
 
@@ -574,6 +635,14 @@
   <!-- ══ Minimap (portrait) ════════════════════════════════════════════════ -->
   <div id="minimap">
     <canvas id="minimap-canvas" width="90" height="240"></canvas>
+  </div>
+
+  <!-- ══ Master volume ═══════════════════════════════════════════════════════ -->
+  <div id="audio-menu" role="group" aria-label="Master volume">
+    <span class="audio-menu-title">Sound</span>
+    <button type="button" class="audio-menu-btn" id="audio-vol-down" aria-label="Lower volume">−</button>
+    <span class="audio-menu-value" id="audio-vol-value">72%</span>
+    <button type="button" class="audio-menu-btn" id="audio-vol-up" aria-label="Raise volume">+</button>
   </div>
 
   <!-- ══ Artifact Detail Panel ═════════════════════════════════════════════ -->

@@ -57,7 +57,15 @@ export class InteractionManager {
     this.panelContext = document.getElementById("artwork-context");
     this.closeBtn    = document.getElementById("artwork-close");
 
+    /** @type {{ playUi: () => void }|null} */
+    this._museumAudio = null;
+
     this._bindEvents();
+  }
+
+  /** Optional UI tick for artwork panel open/close. */
+  setMuseumAudio(audio) {
+    this._museumAudio = audio;
   }
 
   /** Call after DoorManager is set up. */
@@ -213,10 +221,12 @@ export class InteractionManager {
     this.panelContext.textContent = art.context;
     this.panel.classList.add("open");
     this.panelOpen = true;
+    this._museumAudio?.playUi();
   }
 
   _closePanel() {
     this.panel.classList.remove("open");
     this.panelOpen = false;
+    this._museumAudio?.playUi();
   }
 }

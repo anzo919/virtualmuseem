@@ -26,9 +26,11 @@ const SWING_SPEED = 1.6;           // radians per second
 export class DoorManager {
   /**
    * @param {THREE.Box3[]} wallBoxes — shared array from MuseumBuilder / PlayerController
+   * @param {{ onDoorOpen?: () => void, onDoorClose?: () => void }|null} [audioHooks]
    */
-  constructor(wallBoxes) {
+  constructor(wallBoxes, audioHooks = null) {
     this.wallBoxes = wallBoxes;
+    this._audioHooks = audioHooks;
     this._doors    = {};     // id → DoorEntry
     this._targets  = [];     // flat list of interactable meshes
     this._toastTimer = null;
@@ -199,9 +201,11 @@ export class DoorManager {
     if (d.state === "closed") {
       d.state = "opening";
       this.updateCollision(id, true);   // opening → remove wall collision
+      if (this._audioHooks?.onDoorOpen) this._audioHooks.onDoorOpen();
     } else if (d.state === "open") {
       d.state = "closing";
       this.updateCollision(id, false);  // closing → restore wall collision
+      if (this._audioHooks?.onDoorClose) this._audioHooks.onDoorClose();
     }
     // mid-animation states ("opening" / "closing"): ignore new input
   }

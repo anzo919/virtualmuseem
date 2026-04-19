@@ -7,7 +7,9 @@
  */
 
 import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ROOMS, PASSAGES, ARTWORK_DATA, CATEGORIES } from "./config.js";
+import { installWallMuralFrames } from "./posters/museum-wall-murals.js";
 
 /** Room overview PNGs: skip files larger than this (generated art is often huge and can freeze the tab during decode). */
 const POSTER_MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -28,6 +30,8 @@ const G = {
 export class MuseumBuilder {
   constructor(scene) {
     this.scene = scene;
+    /** @type {{ frames: import("./posters/carthage-gallery-frames.js").MuseumFrame[], animate: (n: number) => void }|null} */
+    this._muralAnim = null;
     this.wallBoxes = [];
     this.artworkTargets = [];
     this.artworkPositions = [];
@@ -332,6 +336,20 @@ export class MuseumBuilder {
           this._loadArtworks();
         },
       },
+      {
+        id: "_murals",
+        label: "Wall mural frames (posters)",
+        fn: () => {
+          this._muralAnim = installWallMuralFrames(roomGroups, this.envMap);
+        },
+      },
+      {
+        id: "_glbProps",
+        label: "Imported 3D exhibits",
+        fn: async () => {
+          await this._placeImportedGlbProps(roomGroups);
+        },
+      },
     ];
 
     const total = steps.length;
@@ -362,6 +380,7 @@ export class MuseumBuilder {
       envMap:           this.envMap,
       doors:            this._pendingDoors,
       roomGroups,
+      muralAnim:        this._muralAnim,
     };
   }
 
@@ -415,6 +434,7 @@ export class MuseumBuilder {
     for (const p of PASSAGES) this._buildPassage(p);
 
     this._loadArtworks();
+    this._muralAnim = installWallMuralFrames(roomGroups, this.envMap);
 
     return {
       wallBoxes:        this.wallBoxes,
@@ -425,6 +445,7 @@ export class MuseumBuilder {
       envMap:           this.envMap,
       doors:            this._pendingDoors,
       roomGroups,                             // ← new: one Group per room
+      muralAnim:        this._muralAnim,
     };
   }
 
@@ -1343,6 +1364,120 @@ export class MuseumBuilder {
     if (!ctx) return source;
     ctx.drawImage(source, 0, 0, tw, th);
     return cv;
+  }
+
+  /**
+   * Imported GLBs from `museum/3d/` — parented to room Groups (same visibility as room geometry).
+   * Scroll in r1; gold + spell book in r2 — all three sit in the first two rooms so streaming shows them together.
+   *
+   * @param {Record<string, THREE.Group>} roomGroups
+   */
+  async _placeImportedGlbProps(roomGroups) {
+    const loader = new GLTFLoader();
+    const envMap = this.envMap;
+
+    /** Resolve next to this module so loads work even when the HTML base URL differs. */
+    const glbUrl = (filename) => new URL(`3d/${filename}`, import.meta.url).href;
+
+    const loadGltf = (filename) =>
+      new Promise((resolve, reject) => {
+        loader.load(glbUrl(filename), resolve, undefined, reject);
+      });
+
+    const applyEnvAndShadows = (object) => {
+      object.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.frustumCulled = false;
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of mats) {
+          if (!mat) continue;
+          if (mat.map) mat.map.colorSpace = THREE.SRGBColorSpace;
+          if (mat.emissiveMap) mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+          if ("envMap" in mat) {
+            mat.envMap = envMap;
+            mat.envMapIntensity = typeof mat.envMapIntensity === "number"
+              ? Math.min(1.0, mat.envMapIntensity + 0.32)
+              : 0.52;
+            mat.needsUpdate = true;
+          }
+        }
+      });
+    };
+
+    /**
+     * @param {import("three/addons/loaders/GLTFLoader.js").GLTF} gltf
+     * @param {string} roomId
+     * @param {THREE.Vector3} worldPos  model base rests at this y (pedestal top)
+     * @param {number} rotationY
+     * @param {number} targetHeight
+     */
+    const addExhibit = (gltf, roomId, worldPos, rotationY, targetHeight) => {
+      const root = gltf.scene;
+      applyEnvAndShadows(root);
+      const box = new THREE.Box3().setFromObject(root);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const baseH = Math.max(size.y, 1e-4);
+      root.scale.setScalar(targetHeight / baseH);
+      root.rotation.y = rotationY;
+      root.updateMatrixWorld(true);
+      const box2 = new THREE.Box3().setFromObject(root);
+      root.position.set(worldPos.x, worldPos.y - box2.min.y, worldPos.z);
+      const grp = roomGroups[roomId];
+      if (grp) grp.add(root);
+      else console.warn("[MuseumBuilder] Missing room group for GLB prop:", roomId);
+    };
+
+    const addPlinth = (roomId, x, z, w, h, d) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), this.mat.trim);
+      mesh.position.set(x, h * 0.5, z);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const grp = roomGroups[roomId];
+      if (grp) grp.add(mesh);
+    };
+
+    const entries = [
+      {
+        file: "pixellabs-scroll-3468.glb",
+        roomId: "r1",
+        plinth: { x: 4.35, z: 73.8, w: 0.55, h: 0.42, d: 0.55 },
+        exhibit: { x: 4.35, yPed: 0.42, z: 73.8, rot: -0.65, height: 0.32 },
+      },
+      {
+        file: "jeremywoodsster-gold-2548.glb",
+        roomId: "r2",
+        plinth: { x: -5.35, z: 57.2, w: 0.62, h: 0.28, d: 0.62 },
+        exhibit: { x: -5.35, yPed: 0.28, z: 57.2, rot: 0.5, height: 0.38 },
+      },
+      {
+        file: "pixellabs-spell-book-3508.glb",
+        roomId: "r2",
+        plinth: { x: 5.45, z: 54.0, w: 0.58, h: 0.38, d: 0.58 },
+        exhibit: { x: 5.45, yPed: 0.38, z: 54.0, rot: -Math.PI * 0.22, height: 0.34 },
+      },
+    ];
+
+    const results = await Promise.allSettled(entries.map((e) => loadGltf(e.file)));
+
+    for (let i = 0; i < results.length; i++) {
+      const res = results[i];
+      const e = entries[i];
+      if (res.status !== "fulfilled") {
+        console.warn("[MuseumBuilder] GLB exhibit failed to load:", glbUrl(e.file), res.reason);
+        continue;
+      }
+      addPlinth(e.roomId, e.plinth.x, e.plinth.z, e.plinth.w, e.plinth.h, e.plinth.d);
+      addExhibit(
+        res.value,
+        e.roomId,
+        new THREE.Vector3(e.exhibit.x, e.exhibit.yPed, e.exhibit.z),
+        e.exhibit.rot,
+        e.exhibit.height,
+      );
+    }
   }
 
   _loadArtworks() {

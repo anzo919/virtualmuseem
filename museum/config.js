@@ -204,7 +204,7 @@ export const CATEGORIES = {
 // zone: r1–r7  |  type: "wall" | "pedestal" | "case" | "centerpiece"
 // wall: "back" (maxZ) | "front" (minZ) | "left" (minX) | "right" (maxX) | "center"
 // centerpiece entries are placed by their room's build method, not _loadArtworks()
-// posterImage: optional ./posters/… for *room overview* panels (with `poster` block).
+// Room overview panels use canvas text only (no posterImage). 3D wood frames: posters/carthage-gallery-frames.js
 // url: optional image for *framed wall* exhibits — https:// or ./local.png; same hero layout as posters (keep files reasonably small).
 // =============================================================================
 
@@ -214,7 +214,6 @@ export const ARTWORK_DATA = [
 
   {
     id: "room-overview-r1", zone: "r1", type: "wall",
-    posterImage: "./posters/room-overview-01.png",
     category: "religion", origin: "Museum guide",
     name: "Phoenician Origins",
     description: "Room overview: founding era of Qart-Hadasht from Tyre to North Africa.",
@@ -254,7 +253,6 @@ export const ARTWORK_DATA = [
     name: "Tyre to Carthage — The Great Migration",
     description: "A reconstruction map showing the Phoenician sea route from Tyre across the Mediterranean to the site of Carthage on the coast of North Africa.",
     context: "The Phoenicians were master navigators, using stars and coastal landmarks to sail the entire length of the Mediterranean. The journey from Tyre to Carthage would have taken several weeks.",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Carthage_ruins.jpg/1024px-Carthage_ruins.jpg",
     wall: "right", offset: -1, heightFactor: 0.45, w: 2.6, h: 1.9,
   },
   {
@@ -270,7 +268,6 @@ export const ARTWORK_DATA = [
 
   {
     id: "room-overview-r2", zone: "r2", type: "wall",
-    posterImage: "./posters/room-overview-02.png",
     category: "trade", origin: "Museum guide",
     name: "Rise of Commerce",
     description: "Room overview: Carthage as a Mediterranean trade empire.",
@@ -294,7 +291,6 @@ export const ARTWORK_DATA = [
     name: "Phoenician Trade Routes — Mediterranean Network",
     description: "A reconstruction of Carthage's vast Mediterranean trade network — spanning North Africa, Spain, Sardinia, Sicily, and reaching as far as Britain and possibly West Africa.",
     context: "Governed by a powerful merchant oligarchy, Carthage controlled trade in wine, olive oil, metals, and textiles across the entire western Mediterranean. By the 6th century BC, it was the dominant commercial power of the ancient world.",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Carthage_ruins.jpg/1024px-Carthage_ruins.jpg",
     wall: "back", offset: 0, heightFactor: 0.45, w: 3.5, h: 2.4,
   },
   {
@@ -326,7 +322,6 @@ export const ARTWORK_DATA = [
 
   {
     id: "room-overview-r3", zone: "r3", type: "wall",
-    posterImage: "./posters/room-overview-03.png",
     category: "military", origin: "Museum guide",
     name: "Conflicts with the Greeks",
     description: "Room overview: wars that turned Carthage into a military sea power.",
@@ -383,7 +378,6 @@ export const ARTWORK_DATA = [
 
   {
     id: "room-overview-r4", zone: "r4", type: "wall",
-    posterImage: "./posters/room-overview-04.png",
     category: "architecture", origin: "Museum guide",
     name: "Apogee of Carthage",
     description: "Room overview: the city at its height of wealth, population, and influence.",
@@ -432,7 +426,6 @@ export const ARTWORK_DATA = [
     name: "Reconstruction of Byrsa Hill",
     description: "An archaeological reconstruction of Byrsa Hill at the city's peak — grid-pattern streets, multi-storey apartment blocks, and public squares representing one of the most advanced urban centres of the ancient world.",
     context: "At its height, Carthage housed nearly half a million people under an oligarchic republic governed by elite merchant families. French excavations confirmed apartment blocks up to six storeys high, paved streets, and a sophisticated sewage system.",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Carthage_ruins.jpg/1024px-Carthage_ruins.jpg",
     wall: "left", offset: 4, heightFactor: 0.42, w: 3.0, h: 2.2,
   },
   {
@@ -456,7 +449,6 @@ export const ARTWORK_DATA = [
 
   {
     id: "room-overview-r5", zone: "r5", type: "wall",
-    posterImage: "./posters/room-overview-05.png",
     category: "military", origin: "Museum guide",
     name: "The Punic Wars",
     description: "Room overview: the life-and-death struggle between Carthage and Rome.",
@@ -505,7 +497,6 @@ export const ARTWORK_DATA = [
     name: "Battle of Cannae — 216 BC",
     description: "A strategic map of Cannae, where Hannibal encircled and annihilated a Roman army of 70,000 men in a single afternoon.",
     context: "Cannae is still studied in military academies worldwide as the perfect tactical encirclement. An estimated 50,000 Romans died in a few hours — Rome's worst single-day defeat in history. Yet Rome refused to surrender.",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Carthage_ruins.jpg/1024px-Carthage_ruins.jpg",
     wall: "right", offset: -3, heightFactor: 0.45, w: 3.0, h: 2.2,
   },
 
@@ -513,7 +504,6 @@ export const ARTWORK_DATA = [
 
   {
     id: "room-overview-r6", zone: "r6", type: "wall",
-    posterImage: "./posters/room-overview-06.png",
     category: "architecture", origin: "Museum guide",
     name: "The Fall of Carthage",
     description: "Room overview: the Third Punic War and the deliberate erasure of a city.",
@@ -536,7 +526,6 @@ export const ARTWORK_DATA = [
     name: "Ruins of Carthage — Byrsa Hill",
     description: "A panoramic view of Byrsa Hill after 146 BC — ruins where a city of half a million once stood, erased in seventeen days of fire by the Roman legions of Scipio Aemilianus.",
     context: "The Third Punic War ended with total annihilation. Rome did not merely defeat Carthage — it erased it. 50,000 survivors were sold into slavery. The buildings were demolished stone by stone. An entire civilisation was wiped from the earth.",
-    url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Carthage_ruins.jpg/1024px-Carthage_ruins.jpg",
     wall: "back", offset: 0, heightFactor: 0.45, w: 4.0, h: 2.6,
   },
   {
@@ -569,7 +558,6 @@ export const ARTWORK_DATA = [
 
   {
     id: "room-overview-r7", zone: "r7", type: "wall",
-    posterImage: "./posters/room-overview-07.png",
     category: "architecture", origin: "Museum guide",
     name: "Roman Carthage & Legacy",
     description: "Room overview: rebirth as a Roman metropolis and long cultural afterlife.",

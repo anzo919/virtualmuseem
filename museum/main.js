@@ -17,6 +17,7 @@ import { DoorManager }         from "./DoorManager.js";
 import { MiniGameManager }     from "./MiniGameManager.js";
 import { RoomManager }         from "./RoomManager.js";
 import { RoomInfoPanel }       from "./RoomInfoPanel.js";
+import { MuseumAudio }         from "./MuseumAudio.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RENDERER
@@ -148,7 +149,7 @@ function loadGLTFAsync(loader, path) {
 }
 
 async function preloadHannibalStatue(envMap) {
-  const gltf = await loadGLTFAsync(new GLTFLoader(), "./3d/hannibal.glb");
+  const gltf = await loadGLTFAsync(new GLTFLoader(), new URL("./3d/hannibal.glb", import.meta.url).href);
   const statue = gltf.scene;
   const box1 = new THREE.Box3().setFromObject(statue);
   const naturalH = box1.max.y - box1.min.y;
@@ -394,6 +395,7 @@ try {
 const {
   wallBoxes, artworkTargets, artworkPositions,
   torchLights, rotatingArtifact, envMap, doors, roomGroups,
+  muralAnim,
 } = buildResult;
 
 scene.background  = new THREE.Color(0x0e0c0a);
@@ -433,6 +435,21 @@ try {
 setLoadingProgress("Ready", 1);
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AUDIO (buffers load here — failures are non-fatal)
+// ═══════════════════════════════════════════════════════════════════════════
+
+const museumAudio = new MuseumAudio(camera);
+try {
+  await museumAudio.init();
+} catch (err) {
+  console.warn("Museum audio failed to load (game continues without sound):", err);
+}
+museumAudio.attachVolumeUi();
+document.addEventListener("pointerlockchange", () => {
+  if (document.pointerLockElement) void museumAudio.startMusicIfNeeded();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONTROLLERS
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -466,7 +483,10 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "KeyB") roomManager.toggleDebug();
 });
 
-const doorManager = new DoorManager(wallBoxes);
+const doorManager = new DoorManager(wallBoxes, {
+  onDoorOpen: () => museumAudio.playDoorOpen(),
+  onDoorClose: () => museumAudio.playDoorClose(),
+});
 for (const d of doors) {
   const passage = PASSAGES.find((p) => p.id === d.passageId);
   const linkedRoomId = passage ? passage.to : null;
@@ -497,6 +517,7 @@ const interaction = new InteractionManager(
 );
 interaction.setDoorTargets(doorManager.targets);
 interaction.setDoorManager(doorManager);
+interaction.setMuseumAudio(museumAudio);
 const particles   = new DustParticleSystem(scene);
 const minimap        = new Minimap();
 const zoneManager    = new ZoneManager(scene);
@@ -538,6 +559,8 @@ function animate() {
   particles.update(delta, camera.position, currentRoom);
 
   if (rotatingArtifact) rotatingArtifact.rotation.y += delta * 0.28;
+
+  if (muralAnim) muralAnim.animate(performance.now() * 0.001);
 
   // Torch flicker
   const t = performance.now();

@@ -9,78 +9,107 @@
     body:active { cursor: grabbing; }
     #hint { position: fixed; bottom: 12px; left: 12px; color: #c4a882; font: 14px system-ui, sans-serif; opacity: 0.9; pointer-events: none; max-width: 92vw; }
   </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "../node_modules/three/build/three.module.js",
+      "three/addons/": "../node_modules/three/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
-  <div id="hint">Drag to orbit · wheel to zoom — preview of <code>carthage-gallery-frames.js</code></div>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="carthage-gallery-frames.js"></script>
-  <script>
-    (function () {
-      var scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x1a1814);
+  <div id="hint">Drag to orbit · wheel to zoom — <code>MuseumFrame</code> (3D frame, no image)</div>
+  <script type="module">
+    import * as THREE from "three";
+    import { MuseumFrame } from "./carthage-gallery-frames.js";
 
-      var camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 500);
-      var target = new THREE.Vector3(0, 3, 0);
-      var radius = 24;
-      var theta = 0;
-      var phi = 0.35;
-      function updateCamera() {
-        var sp = Math.sin(phi);
-        camera.position.set(
-          target.x + radius * Math.cos(theta) * sp,
-          target.y + radius * Math.cos(phi),
-          target.z + radius * Math.sin(theta) * sp
-        );
-        camera.lookAt(target);
-      }
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1814);
+
+    const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 500);
+    const target = new THREE.Vector3(0, 2.5, 0);
+    let radius = 14;
+    let theta = 0;
+    let phi = 0.4;
+    function updateCamera() {
+      const sp = Math.sin(phi);
+      camera.position.set(
+        target.x + radius * Math.cos(theta) * sp,
+        target.y + radius * Math.cos(phi),
+        target.z + radius * Math.sin(theta) * sp,
+      );
+      camera.lookAt(target);
+    }
+    updateCamera();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+    const sun = new THREE.DirectionalLight(0xfff0e0, 0.9);
+    sun.position.set(4, 10, 6);
+    scene.add(sun);
+
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(16, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a4036, roughness: 0.92 }),
+    );
+    wall.position.set(0, 4, -2);
+    wall.receiveShadow = true;
+    scene.add(wall);
+
+    const root = new THREE.Group();
+    scene.add(root);
+    const frame = new MuseumFrame(
+      root,
+      new THREE.Vector3(0, 2.5, -1.85),
+      0,
+      null,
+      null,
+      { width: 2.4, height: 1.8, frameColor: 0x6b4423 },
+    );
+
+    let dragging = false;
+    let lx = 0;
+    let ly = 0;
+    document.addEventListener("mousedown", (e) => {
+      dragging = true;
+      lx = e.clientX;
+      ly = e.clientY;
+    });
+    document.addEventListener("mouseup", () => { dragging = false; });
+    document.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - lx;
+      const dy = e.clientY - ly;
+      lx = e.clientX;
+      ly = e.clientY;
+      theta -= dx * 0.005;
+      phi = Math.min(Math.max(0.08, phi - dy * 0.005), Math.PI - 0.08);
       updateCamera();
+    });
+    document.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      radius = Math.min(Math.max(5, radius + e.deltaY * 0.02), 60);
+      updateCamera();
+    }, { passive: false });
 
-      var renderer = new THREE.WebGLRenderer({ antialias: true });
+    window.addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      document.body.appendChild(renderer.domElement);
+    });
 
-      createGalleryRoom(scene);
-      CarthageGallery.init(scene);
-
-      var dragging = false;
-      var lx = 0, ly = 0;
-      document.addEventListener("mousedown", function (e) {
-        dragging = true;
-        lx = e.clientX;
-        ly = e.clientY;
-      });
-      document.addEventListener("mouseup", function () { dragging = false; });
-      document.addEventListener("mousemove", function (e) {
-        if (!dragging) return;
-        var dx = e.clientX - lx;
-        var dy = e.clientY - ly;
-        lx = e.clientX;
-        ly = e.clientY;
-        theta -= dx * 0.005;
-        phi = Math.min(Math.max(0.08, phi - dy * 0.005), Math.PI - 0.08);
-        updateCamera();
-      });
-      document.addEventListener("wheel", function (e) {
-        e.preventDefault();
-        radius = Math.min(Math.max(8, radius + e.deltaY * 0.02), 80);
-        updateCamera();
-      }, { passive: false });
-
-      window.addEventListener("resize", function () {
-        camera.aspect = innerWidth / innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(innerWidth, innerHeight);
-      });
-
-      function animate(t) {
-        requestAnimationFrame(animate);
-        var time = t * 0.001;
-        CarthageGallery.animate(time);
-        renderer.render(scene, camera);
-      }
+    function animate(t) {
       requestAnimationFrame(animate);
-    })();
+      const time = t * 0.001;
+      frame.animate(time);
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
   </script>
 </body>
 </html>
