@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Carthage gallery frames — preview</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #111; cursor: grab; }
+    body:active { cursor: grabbing; }
+    #hint { position: fixed; bottom: 12px; left: 12px; color: #c4a882; font: 14px system-ui, sans-serif; opacity: 0.9; pointer-events: none; max-width: 92vw; }
+  </style>
+</head>
+<body>
+  <div id="hint">Drag to orbit · wheel to zoom — preview of <code>carthage-gallery-frames.js</code></div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="carthage-gallery-frames.js"></script>
+  <script>
+    (function () {
+      var scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1814);
+
+      var camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 500);
+      var target = new THREE.Vector3(0, 3, 0);
+      var radius = 24;
+      var theta = 0;
+      var phi = 0.35;
+      function updateCamera() {
+        var sp = Math.sin(phi);
+        camera.position.set(
+          target.x + radius * Math.cos(theta) * sp,
+          target.y + radius * Math.cos(phi),
+          target.z + radius * Math.sin(theta) * sp
+        );
+        camera.lookAt(target);
+      }
+      updateCamera();
+
+      var renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      document.body.appendChild(renderer.domElement);
+
+      createGalleryRoom(scene);
+      CarthageGallery.init(scene);
+
+      var dragging = false;
+      var lx = 0, ly = 0;
+      document.addEventListener("mousedown", function (e) {
+        dragging = true;
+        lx = e.clientX;
+        ly = e.clientY;
+      });
+      document.addEventListener("mouseup", function () { dragging = false; });
+      document.addEventListener("mousemove", function (e) {
+        if (!dragging) return;
+        var dx = e.clientX - lx;
+        var dy = e.clientY - ly;
+        lx = e.clientX;
+        ly = e.clientY;
+        theta -= dx * 0.005;
+        phi = Math.min(Math.max(0.08, phi - dy * 0.005), Math.PI - 0.08);
+        updateCamera();
+      });
+      document.addEventListener("wheel", function (e) {
+        e.preventDefault();
+        radius = Math.min(Math.max(8, radius + e.deltaY * 0.02), 80);
+        updateCamera();
+      }, { passive: false });
+
+      window.addEventListener("resize", function () {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+      });
+
+      function animate(t) {
+        requestAnimationFrame(animate);
+        var time = t * 0.001;
+        CarthageGallery.animate(time);
+        renderer.render(scene, camera);
+      }
+      requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>
